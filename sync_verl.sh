@@ -17,6 +17,15 @@ REMOTE="verl-upstream"
 REMOTE_URL="https://github.com/verl-project/verl.git"
 VERSION_FILE="VERL_VERSION"
 
+# git subtree pull 要求工作树干净，否则会报 "working tree has modifications. Cannot add."
+# 提前检查，避免出现「VERL_VERSION 已改但 verl/ 实际没同步」的不一致。
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "!! 工作树有未提交改动，git subtree 无法同步。" >&2
+  echo "   请先提交或暂存后再试：git commit / git stash" >&2
+  git status --short >&2
+  exit 1
+fi
+
 # 解析参数
 if [[ "${1:-}" == "--set" ]]; then
   if [[ -z "${2:-}" ]]; then
