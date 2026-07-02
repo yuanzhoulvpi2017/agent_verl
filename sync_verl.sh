@@ -8,7 +8,7 @@
 # 用法：
 #   ./sync_verl.sh                # 同步到 VERL_VERSION 里记录的版本
 #   ./sync_verl.sh v0.8.0         # 临时指定分支/tag（不改 VERL_VERSION）
-#   ./sync_verl.sh --set v0.9.0   # 升级：写入新版本到 VERL_VERSION 并同步
+#   ./sync_verl.sh --set v0.8.0   # 升级：验证版本存在后写入 VERL_VERSION 并同步
 #
 set -euo pipefail
 
@@ -26,15 +26,15 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-# 解析参数
+# 解析参数（--set 的写文件操作推迟到 fetch 成功验证 ref 之后，避免写脏 VERL_VERSION）
+PERSIST_VERSION=""
 if [[ "${1:-}" == "--set" ]]; then
   if [[ -z "${2:-}" ]]; then
-    echo "!! --set 需要一个版本参数，例如：./sync_verl.sh --set v0.9.0" >&2
+    echo "!! --set 需要一个版本参数，例如：./sync_verl.sh --set v0.8.0" >&2
     exit 1
   fi
-  echo "${2}" > "${VERSION_FILE}"
-  echo ">> 已将跟踪版本更新为 ${2}（写入 ${VERSION_FILE}）"
   REF="${2}"
+  PERSIST_VERSION="${2}"
 elif [[ -n "${1:-}" ]]; then
   REF="${1}"
 else
@@ -52,8 +52,20 @@ if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
   git remote add "${REMOTE}" "${REMOTE_URL}"
 fi
 
+echo ">> 正在校验并拉取 ${REMOTE}/${REF} ..."
+if ! git fetch "${REMOTE}" "${REF}"; then
+  echo "!! 上游不存在 ref '${REF}'，同步终止（VERL_VERSION 未改动）。" >&2
+  echo "   可用的 release tag 见：git tag | grep '^v'" >&2
+  exit 1
+fi
+
+# fetch 成功，ref 确实存在，此时才持久化版本号
+if [[ -n "${PERSIST_VERSION}" ]]; then
+  echo "${PERSIST_VERSION}" > "${VERSION_FILE}"
+  echo ">> 已将跟踪版本更新为 ${PERSIST_VERSION}（写入 ${VERSION_FILE}）"
+fi
+
 echo ">> 正在从 ${REMOTE}/${REF} 同步到 ${PREFIX}/ ..."
-git fetch "${REMOTE}" "${REF}"
 git subtree pull --prefix="${PREFIX}" "${REMOTE}" "${REF}" --squash
 
 cat <<'EOF'
