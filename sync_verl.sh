@@ -59,14 +59,15 @@ if ! git fetch "${REMOTE}" "${REF}"; then
   exit 1
 fi
 
-# fetch 成功，ref 确实存在，此时才持久化版本号
-if [[ -n "${PERSIST_VERSION}" ]]; then
-  echo "${PERSIST_VERSION}" > "${VERSION_FILE}"
-  echo ">> 已将跟踪版本更新为 ${PERSIST_VERSION}（写入 ${VERSION_FILE}）"
-fi
-
+# 先做 subtree pull（此时工作树仍干净，满足其要求）
 echo ">> 正在从 ${REMOTE}/${REF} 同步到 ${PREFIX}/ ..."
 git subtree pull --prefix="${PREFIX}" "${REMOTE}" "${REF}" --squash
+
+# 同步成功后再持久化版本号（写文件会弄脏工作树，必须放在 subtree pull 之后）
+if [[ -n "${PERSIST_VERSION}" ]]; then
+  echo "${PERSIST_VERSION}" > "${VERSION_FILE}"
+  echo ">> 已将跟踪版本更新为 ${PERSIST_VERSION}（写入 ${VERSION_FILE}），记得一并提交。"
+fi
 
 cat <<'EOF'
 
