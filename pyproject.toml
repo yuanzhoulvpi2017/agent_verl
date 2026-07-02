@@ -1,0 +1,13 @@
+[project]
+name = "agent-verl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "verl",
+]
+
+# 把本地 verl/ 目录作为可编辑依赖装进环境（改动 verl/ 源码即时生效，无需重装）
+[tool.uv.sources]
+verl = { path = "verl", editable = true }
