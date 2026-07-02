@@ -2,16 +2,40 @@
 #
 # 同步上游 verl 到本仓库的 verl/ 子目录（基于 git subtree）。
 #
+# 版本固定策略：默认从 VERL_VERSION 文件读取要跟踪的 tag/分支，
+# 便于「固定 release 版本、按需升级」的工作流。
+#
 # 用法：
-#   ./sync_verl.sh              # 默认从 verl-upstream 的 main 分支同步
-#   ./sync_verl.sh v0.8.0       # 从指定分支/tag 同步
+#   ./sync_verl.sh                # 同步到 VERL_VERSION 里记录的版本
+#   ./sync_verl.sh v0.8.0         # 临时指定分支/tag（不改 VERL_VERSION）
+#   ./sync_verl.sh --set v0.9.0   # 升级：写入新版本到 VERL_VERSION 并同步
 #
 set -euo pipefail
 
 PREFIX="verl"
 REMOTE="verl-upstream"
 REMOTE_URL="https://github.com/verl-project/verl.git"
-REF="${1:-main}"
+VERSION_FILE="VERL_VERSION"
+
+# 解析参数
+if [[ "${1:-}" == "--set" ]]; then
+  if [[ -z "${2:-}" ]]; then
+    echo "!! --set 需要一个版本参数，例如：./sync_verl.sh --set v0.9.0" >&2
+    exit 1
+  fi
+  echo "${2}" > "${VERSION_FILE}"
+  echo ">> 已将跟踪版本更新为 ${2}（写入 ${VERSION_FILE}）"
+  REF="${2}"
+elif [[ -n "${1:-}" ]]; then
+  REF="${1}"
+else
+  if [[ ! -f "${VERSION_FILE}" ]]; then
+    echo "!! 找不到 ${VERSION_FILE}，且未提供版本参数。" >&2
+    echo "   请执行：./sync_verl.sh --set <版本>" >&2
+    exit 1
+  fi
+  REF="$(tr -d '[:space:]' < "${VERSION_FILE}")"
+fi
 
 # 若 remote 不存在则自动添加
 if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
@@ -23,5 +47,10 @@ echo ">> 正在从 ${REMOTE}/${REF} 同步到 ${PREFIX}/ ..."
 git fetch "${REMOTE}" "${REF}"
 git subtree pull --prefix="${PREFIX}" "${REMOTE}" "${REF}" --squash
 
-echo ">> 同步完成。别忘了 push："
-echo "   git push origin \$(git rev-parse --abbrev-ref HEAD)"
+cat <<'EOF'
+
+>> 同步完成。
+   如果出现冲突：解决后 git add verl/ && git commit
+   升级后请检查「被接管/小改的模块」，参考 VENDOR_CHANGES.md 做三方对比。
+   最后别忘了推送：git push origin $(git rev-parse --abbrev-ref HEAD)
+EOF
